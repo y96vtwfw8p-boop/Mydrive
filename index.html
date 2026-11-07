@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>my drive chat</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { background: #0f172a; color: #f8fafc; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  
+  /* Шапка */
+  header { background: #1e293b; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; flex-shrink: 0; }
+  .logo { font-size: 18px; font-weight: 800; color: #38bdf8; letter-spacing: 0.5px; }
+  .user-bar { display: none; align-items: center; gap: 10px; font-size: 13px; color: #94a3b8; }
+  .logout-btn { background: #ef4444; color: #fff; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+
+  /* Авторизация */
+  #auth-screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+  .auth-card { background: #1e293b; padding: 24px; border-radius: 14px; width: 100%; max-width: 360px; border: 1px solid #334155; }
+  .tabs { display: flex; margin-bottom: 18px; background: #0f172a; border-radius: 8px; padding: 4px; }
+  .tab { flex: 1; text-align: center; padding: 8px; cursor: pointer; border-radius: 6px; font-size: 14px; font-weight: 600; color: #94a3b8; }
+  .tab.active { background: #38bdf8; color: #0f172a; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: #cbd5e1; margin-bottom: 4px; }
+  .field input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 14px; outline: none; }
+  .field input:focus { border-color: #38bdf8; }
+  .warn-box { background: rgba(245, 158, 11, 0.12); border: 1px solid #f59e0b; color: #fcd34d; padding: 10px; border-radius: 8px; font-size: 12px; margin-bottom: 14px; line-height: 1.4; }
+  .submit-btn { width: 100%; padding: 12px; background: #38bdf8; color: #0f172a; border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  .status-msg { color: #f87171; font-size: 13px; margin-top: 10px; text-align: center; min-height: 18px; }
+
+  /* Основной экран чата */
+  #chat-screen { flex: 1; display: none; overflow: hidden; }
+  .sidebar { width: 300px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; flex-shrink: 0; }
+  .search-area { padding: 12px; border-bottom: 1px solid #334155; display: flex; gap: 6px; }
+  .search-area input { flex: 1; padding: 8px 10px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 13px; outline: none; }
+  .search-area button { background: #38bdf8; color: #0f172a; border: none; padding: 0 12px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .chat-list { flex: 1; overflow-y: auto; }
+  .chat-item { padding: 12px 14px; border-bottom: 1px solid #0f172a; cursor: pointer; }
+  .chat-item:hover, .chat-item.active { background: #334155; }
+  .chat-item-name { font-weight: 600; font-size: 14px; color: #f8fafc; }
+  .chat-item-user { font-size: 12px; color: #38bdf8; }
+
+  .main-chat { flex: 1; display: flex; flex-direction: column; background: #0f172a; }
+  .chat-top { padding: 12px 16px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 10px; min-height: 50px; }
+  .back-btn { display: none; background: #334155; border: none; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 78%; padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.4; word-wrap: break-word; }
+  .msg.me { align-self: flex-end; background: #38bdf8; color: #0f172a; border-bottom-right-radius: 2px; }
+  .msg.other { align-self: flex-start; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-bottom-left-radius: 2px; }
+  .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
+
+  .input-bar { padding: 12px; background: #1e293b; border-top: 1px solid #334155; display: none; gap: 8px; }
+  .input-bar input { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 14px; outline: none; }
+  .input-bar button { background: #38bdf8; color: #0f172a; border: none; padding: 0 16px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+
+  @media (max-width: 680px) {
+    .sidebar { width: 100%; }
+    .main-chat { display: none; width: 100%; }
+    #chat-screen.open-chat .sidebar { display: none; }
+    #chat-screen.open-chat .main-chat { display: flex; }
+    .back-btn { display: inline-block; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">my drive chat</div>
+  <div class="user-bar" id="user-bar">
+    <span id="my-label"></span>
+    <button class="logout-btn" onclick="logout()">Выйти</button>
+  </div>
+</header>
+
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="tabs">
+      <div class="tab active" id="t-reg" onclick="setMode('reg')">Регистрация</div>
+      <div class="tab" id="t-log" onclick="setMode('log')">Войти</div>
+    </div>
+    <div class="field">
+      <label>Ваше имя</label>
+      <input type="text" id="in-name" placeholder="Например: Питер">
+    </div>
+    <div class="field">
+      <label>Юзернейм (для поиска)</label>
+      <input type="text" id="in-user" placeholder="Например: spidey">
+    </div>
+    <div class="field">
+      <label>Пароль</label>
+      <input type="password" id="in-pass" placeholder="Придумайте пароль">
+    </div>
+    <div class="warn-box" id="reg-warn">
+      это браузер, данные могут не сохранится. Сохраняете пароли
+    </div>
+    <button class="submit-btn" id="auth-btn" onclick="submitAuth()">Зарегистрироваться</button>
+    <div class="status-msg" id="status-msg"></div>
+  </div>
+</div>
+
+<div id="chat-screen">
+  <div class="sidebar">
+    <div class="search-area">
+      <input type="text" id="search-in" placeholder="Введите юзернейм...">
+      <button onclick="findUser()">Найти</button>
+    </div>
+    <div class="chat-list" id="chat-list"></div>
+  </div>
+  <div class="main-chat">
+    <div class="chat-top">
+      <button class="back-btn" onclick="closeMobileChat()">← Назад</button>
+      <div id="chat-title" style="font-weight:700;font-size:15px;">Выберите пользователя</div>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="input-bar" id="input-bar">
+      <input type="text" id="msg-in" placeholder="Написать сообщение..." onkeydown="if(event.key==='Enter')sendMsg()">
+      <button onclick="sendMsg()">Отпр</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://qndyjtnginlakoregekv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Gp4R2GrfEvxIkqJf_WiR4w_b9m8kzSR';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let mode = 'reg';
+let me = JSON.parse(localStorage.getItem('mdc_user') || 'null');
+let activePeer = null;
+let contacts = JSON.parse(localStorage.getItem('mdc_contacts') || '[]');
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('t-reg').className = m === 'reg' ? 'tab active' : 'tab';
+  document.getElementById('t-log').className = m === 'log' ? 'tab active' : 'tab';
+  document.getElementById('reg-warn').style.display = m === 'reg' ? 'block' : 'none';
+  document.getElementById('auth-btn').innerText = m === 'reg' ? 'Зарегистрироваться' : 'Войти в аккаунт';
+  document.getElementById('status-msg').innerText = '';
+}
+
+async function submitAuth() {
+  const name = document.getElementById('in-name').value.trim();
+  const username = document.getElementById('in-user').value.trim().toLowerCase().replace(/^@/, '');
+  const password = document.getElementById('in-pass').value.trim();
+  const st = document.getElementById('status-msg');
+  st.innerText = '';
+
+  if (!name || !username || !password) {
+    st.innerText = 'Заполните все 3 поля!';
+    return;
+  }
+
+  if (mode === 'reg') {
+    const { data: exist } = await db.from('users').select('username').eq('username', username).maybeSingle();
+    if (exist) { st.innerText = 'Этот юзернейм уже занят!'; return; }
+    const { data, error } = await db.from('users').insert([{ name, username, password }]).select().single();
+    if (error) { st.innerText = 'Ошибка: ' + error.message; return; }
+    loginSuccess(data);
+  } else {
+    const { data, error } = await db.from('users')
+      .select('*')
+      .eq('name', name)
+      .eq('username', username)
+      .eq('password', password)
+      .maybeSingle();
+    if (error || !data) { st.innerText = 'Неверное имя, юзернейм или пароль!'; return; }
+    loginSuccess(data);
+  }
+}
+
+function loginSuccess(userObj) {
+  me = userObj;
+  localStorage.setItem('mdc_user', JSON.stringify(me));
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('chat-screen').style.display = 'flex';
+  document.getElementById('user-bar').style.display = 'flex';
+  document.getElementById('my-label').innerText = `${me.name} (@${me.username})`;
+  loadRecentPeers();
+  subscribeRealtime();
+}
+
+function logout() {
+  localStorage.removeItem('mdc_user');
+  location.reload();
+}
+
+async function findUser() {
+  const q = document.getElementById('search-in').value.trim().toLowerCase().replace(/^@/, '');
+  if (!q) return;
+  if (q === me.username) { alert('Это ваш юзернейм!'); return; }
+
+  const { data } = await db.from('users').select('name, username').eq('username', q).maybeSingle();
+  if (!data) {
+    alert('Пользователь @' + q + ' не найден!');
+    return;
+  }
+  addContact(data);
+  document.getElementById('search-in').value = '';
+  openChat(data);
+}
+
+function addContact(u) {
+  if (!contacts.find(c => c.username === u.username)) {
+    contacts.unshift(u);
+    localStorage.setItem('mdc_contacts', JSON.stringify(contacts));
+  }
+  renderContacts();
+}
+
+function renderContacts() {
+  const box = document.getElementById('chat-list');
+  box.innerHTML = '';
+  contacts.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'chat-item' + (activePeer && activePeer.username === c.username ? ' active' : '');
+    d.innerHTML = `<div class="chat-item-name">${c.name}</div><div class="chat-item-user">@${c.username}</div>`;
+    d.onclick = () => openChat(c);
+    box.appendChild(d);
+  });
+}
+
+async function loadRecentPeers() {
+  const { data } = await db.from('messages')
+    .select('sender_username, receiver_username')
+    .or(`sender_username.eq.${me.username},receiver_username.eq.${me.username}`)
+    .order('created_at', { ascending: false });
+
+  if (data) {
+    const unames = new Set();
+    data.forEach(m => {
+      const other = m.sender_username === me.username ? m.receiver_username : m.sender_username;
+      unames.add(other);
+    });
+    if (unames.size > 0) {
+      const { data: uList } = await db.from('users').select('name, username').in('username', Array.from(unames));
+      if (uList) uList.forEach(u => addContact(u));
+    }
+  }
+  renderContacts();
+}
+
+async function openChat(peer) {
+  activePeer = peer;
+  renderContacts();
+  document.getElementById('chat-screen').classList.add('open-chat');
+  document.getElementById('chat-title').innerText = `${peer.name} (@${peer.username})`;
+  document.getElementById('input-bar').style.display = 'flex';
+  await loadMessages();
+}
+
+function closeMobileChat() {
+  document.getElementById('chat-screen').classList.remove('open-chat');
+}
+
+async function loadMessages() {
+  if (!activePeer) return;
+  const { data } = await db.from('messages')
+    .select('*')
+    .or(`and(sender_username.eq.${me.username},receiver_username.eq.${activePeer.username}),and(sender_username.eq.${activePeer.username},receiver_username.eq.${me.username})`)
+    .order('created_at', { ascending: true });
+
+  const box = document.getElementById('messages');
+  box.innerHTML = '';
+  if (data) data.forEach(renderSingleMsg);
+  box.scrollTop = box.scrollHeight;
+}
+
+function renderSingleMsg(m) {
+  const box = document.getElementById('messages');
+  const d = document.createElement('div');
+  const isMe = m.sender_username === me.username;
+  d.className = 'msg ' + (isMe ? 'me' : 'other');
+  const time = new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  d.innerHTML = `<div>${escapeHtml(m.content)}</div><div class="msg-time">${time}</div>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMsg() {
+  const inp = document.getElementById('msg-in');
+  const text = inp.value.trim();
+  if (!text || !activePeer) return;
+  inp.value = '';
+
+  const { error } = await db.from('messages').insert([{
+    sender_username: me.username,
+    receiver_username: activePeer.username,
+    content: text
+  }]);
+  if (error) alert('Ошибка отправки: ' + error.message);
+}
+
+function subscribeRealtime() {
+  db.channel('public:messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, async payload => {
+      const m = payload.new;
+      if (m.sender_username !== me.username && m.receiver_username !== me.username) return;
+
+      const otherUser = m.sender_username === me.username ? m.receiver_username : m.sender_username;
+      if (!contacts.find(c => c.username === otherUser)) {
+        const { data: u } = await db.from('users').select('name, username').eq('username', otherUser).maybeSingle();
+        if (u) addContact(u);
+      }
+
+      if (activePeer && (m.sender_username === activePeer.username || m.receiver_username === activePeer.username)) {
+        renderSingleMsg(m);
+      }
+    })
+    .subscribe();
+}
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+if (me) loginSuccess(me);
+</script>
+</body>
+</html>
